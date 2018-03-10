@@ -7,13 +7,17 @@
     "test": "jest"
   },
   "dependencies": {
+    "firebase": "^4.10.0",
     "immutability-helper": "^2.6.4",
     "moment": "^2.20.1",
+    "re-base": "^3.2.2",
     "react": "16.0.0-alpha.12",
     "react-native": "0.45",
+    "react-native-background-task": "^0.2.1",
     "react-native-charts-wrapper": "^0.4.1",
     "react-native-elements": "^0.19.0",
     "react-native-fs": "^2.9.7",
+    "react-native-push-notification": "^3.0.2",
     "react-native-router-flux": "^3.35.0",
     "react-native-vector-icons": "^4.5.0"
   },
@@ -25,5 +29,9 @@
   },
   "jest": {
     "preset": "react-native"
-  }
+  },
+  "main": "index.js",
+  "repository": "https://github.com/lanzosuarez/care-giver-app.git",
+  "author": "Pons <lanzosuarez@gmail.com>",
+  "license": "MIT"
 }

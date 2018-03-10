@@ -1,10 +1,13 @@
 import React, { Component } from "react";
+import PushNotification from "react-native-push-notification";
 import { Text, View, ScrollView, AsyncStorage, Alert } from "react-native";
 import { Button, FormLabel, FormInput } from "react-native-elements";
+import { Actions } from "react-native-router-flux";
 
 import moment from "moment";
 import update from "immutability-helper";
 import FallHistory from "./FallHistory";
+import firebase from "firebase";
 
 import RNFS from "react-native-fs";
 import DUMMY_DATA from "./fall_sample_data";
@@ -16,13 +19,14 @@ class FallDetector extends Component {
   }
 
   state = {
-    history: [],
+    history: null,
     contact: "",
     set: false,
     overlayVisible: false
   };
 
   input = null;
+  interval = null;
 
   componentDidMount() {
     AsyncStorage.getItem("contact").then(data => {
@@ -30,14 +34,132 @@ class FallDetector extends Component {
         this.setState({ contact: data, set: true });
       }
     });
+    this.setTupData();
+    this.getHistory();
   }
 
+  setTupData = async () => {
+    await this.createFile();
+    this.redDatabyInterval();
+  };
+
+  getHistory = () => {
+    // this.toggleState("loading");
+    const { currentUser } = firebase.auth();
+    firebase
+      .database()
+      .ref(`/users/${currentUser.uid}/patients/${this.props.patient}/history`)
+      .on("value", snapshot => {
+        // this.toggleState("loading");
+        const history = snapshot.val() !== null ? snapshot.val() : {};
+        this.setState({ history });
+      });
+  };
+
+  showNotif = (name, message) => {
+    PushNotification.localNotification({
+      title: `${name}:Fall Detected`,
+      message
+    });
+  };
+
+  addFall = () => {
+    const { currentUser } = firebase.auth();
+    firebase
+      .database()
+      .ref(`/users/${currentUser.uid}/patients/${this.props.patient}/history`)
+      .push({
+        time: `${moment().format("LL")}, ${moment().format("LT")}`,
+        location: this.props.patientDetails.address
+      })
+      .then(d => {
+        // Alert.alert(
+        //   "Fall Record",
+        //   `${`${moment().format("LL")}, ${moment().format("LT")}`} at ${
+        //     this.props.patientDetails.address
+        //   }`,
+        //   [
+        //     {
+        //       text: "Ok"
+        //     }
+        //   ]
+        // );
+        const message = `${`${moment().format("LL")}, ${moment().format(
+          "LT"
+        )}`} at ${this.props.patientDetails.address}.
+								Patient:${this.props.patientDetails.name}`;
+        this.showNotif(this.props.patientDetails.name, message);
+        this.getHistory();
+      })
+      .catch(err => {
+        Alert.alert("Error", "Something went wrong", [
+          {
+            text: "Ok"
+          }
+        ]);
+      });
+  };
+
+  createFile = () => {
+    var path = RNFS.ExternalStorageDirectoryPath + `/${FALL_DATA_FILENAME}`;
+    // write the file
+    return RNFS.writeFile(path, DUMMY_DATA, "utf8")
+      .then(d => console.log("file written"))
+      .catch(err => {
+        console.log(err.message);
+      });
+  };
+
+  redDatabyInterval = () => {
+    let counter = 0;
+    const interval = window.setInterval(async () => {
+      this.readDir();
+    }, 60000);
+  };
+
+  readDir = () => {
+    // get a list of files and directories in the main bundle
+    return RNFS.readDir(RNFS.ExternalStorageDirectoryPath) // On Android, use "RNFS.DocumentDirectoryPath" (MainBundlePath is not defined)
+      .then(result => {
+        // console.log("GOT RESULT", result);
+        // stat the first file
+        return result;
+      })
+      .then(result => {
+        const data_file = result.find(
+          ({ name }) => name === FALL_DATA_FILENAME
+        );
+        if (data_file.isFile()) {
+          return RNFS.readFile(data_file.path, "utf8");
+        } else {
+          return this.createFile();
+        }
+      })
+      .then(contents => {
+        if (contents) {
+          let records = contents.split("\n");
+          if (records) {
+            if (records[records.length - 1] === "1") {
+              this.addFall();
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.log(err.message, err.code);
+      });
+  };
+
   showFall = ({ time, location }) => {
-    Alert.alert("Fall Record", `${time} at ${location}`, [
-      {
-        text: "Ok"
-      }
-    ]);
+    Alert.alert(
+      `${this.props.patientDetails.name}:Fall Record`,
+      `${time} at ${location}`,
+      [
+        {
+          text: "Ok"
+        }
+      ]
+    );
   };
 
   onSetContact = () => {
@@ -49,6 +171,7 @@ class FallDetector extends Component {
   };
 
   render() {
+    console.log(this.state.history);
     return (
       <View
         style={{
@@ -71,6 +194,17 @@ class FallDetector extends Component {
               paddingBottom: 20
             }}
           >
+            <Text
+              onPress={() => Actions.pop({ patient: this.props.patient })}
+              style={{
+                fontSize: 18,
+                textDecorationLine: "underline",
+                paddingLeft: 20,
+                marginTop: 10
+              }}
+            >
+              Back
+            </Text>
             <View style={{ flex: 1 }}>
               <FormLabel>Emergency Contact Number</FormLabel>
               <FormInput
@@ -92,10 +226,7 @@ class FallDetector extends Component {
               />
             </View>
           </View>
-          <FallHistory
-            showFall={this.showFall}
-            fallHistory={this.state.history}
-          />
+          <FallHistory showFall={this.showFall} history={this.state.history} />
         </ScrollView>
       </View>
     );
